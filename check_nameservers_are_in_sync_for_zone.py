@@ -35,7 +35,10 @@ TODO
 
 from docopt import docopt  # Only external requirement. Install via: pip install docopt
 import unittest
-from StringIO import StringIO
+try:
+    from io import StringIO
+except Exception:
+    from StringIO import StringIO
 import subprocess
 import sys
 
@@ -56,19 +59,20 @@ def main():
     sys.exit(return_code)
 
 
-# import logging
-
-
-def check_output(command):
-    "Stub for subprocess.check_output which is only available from python 2.7+"
-    buffer_ = StringIO()
-    process = subprocess.Popen(command, stdout=subprocess.PIPE)
-    for line in process.stdout:
-        buffer_.write(line)
-    process.wait()
-    if process.returncode != 0:
-        raise subprocess.CalledProcessError(process.returncode, command)
-    return buffer_.getvalue()
+if sys.version_info.major == 2:
+    def check_output(command):
+        "Stub for subprocess.check_output which is only available from python 2.7+"
+        buffer_ = StringIO()
+        process = subprocess.Popen(command, stdout=subprocess.PIPE)
+        for line in process.stdout:
+            buffer_.write(line)
+        process.wait()
+        if process.returncode != 0:
+            raise subprocess.CalledProcessError(process.returncode, command)
+        return buffer_.getvalue()
+else:
+    def check_output(command):
+        return subprocess.check_output(command).decode("ascii")
 
 
 class NAGIOS(object):
@@ -82,7 +86,7 @@ def nameservers_for_domain(domain_name):
     output = check_output(['dig', '+short', 'NS', domain_name])
     if "" == output:
         return []
-    return map(lambda each: each.rstrip('.'), output.strip().split('\n'))
+    return list(map(lambda each: each.rstrip('.'), output.strip().split('\n')))
 
 
 def soa_for_domain_with_dns_server(domain_name, dns_server_name):
@@ -104,8 +108,8 @@ def check_soas_equal_for_domain(domain_name, warning_minimum_nameservers=2, crit
             return (NAGIOS.CRITICAL, 'No nameserver for domain "%s", dns is unavailable.' % domain_name)
 
         all_nameservers = nameservers + list(hidden_primaries)
-        soa_records = map(lambda each: soa_for_domain_with_dns_server(
-            domain_name, each), all_nameservers)
+        soa_records = list(map(lambda each: soa_for_domain_with_dns_server(
+            domain_name, each), all_nameservers))
         empty_response_servers = [all_nameservers[index]
                                   for index, record in enumerate(soa_records) if 0 == len(record)]
         if len(empty_response_servers) >= 1:
@@ -291,7 +295,8 @@ class SOATest(unittest.TestCase):
         def fail(*args): raise AssertionError('fnord')
         check_output = fail
         expect(check_soas_equal_for_domain('yeepa.de')) \
-            == (NAGIOS.WARNING, "AssertionError('fnord',)")
+            == (NAGIOS.WARNING,
+                "AssertionError('fnord',)" if sys.version_info.major == 2 else "AssertionError('fnord')")
 
     def test_should_count_non_answering_nameserver_as_empty_response(self):
         self.on_command('dig +short NS yeepa.de').provide_output("""\
