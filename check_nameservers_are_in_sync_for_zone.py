@@ -9,8 +9,8 @@ See: https://www.monitoring-plugins.org/doc/guidelines.html#AEN78
 
 Usage:
     check_nameservers_are_in_sync_for_zone.py --domain=DOMAIN [--warning=WARNING_NAMESERVER_LIMIT]
-        [--critical=CRITICAL_NAMESERVER_LIMIT] [--hidden-primary=NAMESERVER...]
-    check_nameservers_are_in_sync_for_zone.py --selftest [<unittest-options>...]
+        [--critical=CRITICAL_NAMESERVER_LIMIT] [--hidden-primary=NAMESERVER...] [--debug]
+    check_nameservers_are_in_sync_for_zone.py --selftest [<unittest-options>...] [--debug]
 
 Option:
     -h, --help              Show this screen and exit.
@@ -19,6 +19,7 @@ Option:
     -c, --critical CRITICAL_NAMESERVER_LIMIT    Critical if less nameservers [default: 1]
     --hidden-primaries NAMESERVER...    List of hidden primaries [default: ()]
     --selftest              Execute the unittests for this module
+    --debug                 Help debugging
 
 Copyright: Martin Häcker <spamfenger (at) gmx.de>
 License AGPL: https://www.gnu.org/licenses/agpl-3.0.html
@@ -33,7 +34,8 @@ TODO
 * still provide names in error messages
 """
 
-from docopt import docopt  # Only external requirement. Install via: pip install docopt
+from docopt import docopt  # External requirement. Install via: pip install docopt
+import logging
 import unittest
 try:
     from io import StringIO
@@ -42,11 +44,17 @@ except Exception:
 import subprocess
 import sys
 
+debug = False
+
 
 def main():
+    global debug
+
     arguments = docopt(__doc__)
     if arguments['--selftest']:
         unittest.main(argv=sys.argv[1:])
+
+    debug = bool(arguments['--debug'])
 
     (return_code, label), message \
         = check_soas_equal_for_domain(
@@ -95,8 +103,8 @@ def soa_for_domain_with_dns_server(domain_name, dns_server_name):
             ['dig', '+short', 'SOA', domain_name, '@' + dns_server_name])
         return output.strip()
     except subprocess.CalledProcessError as error:
-        # TODO if --verbose
-        # logging.exception('soa_for_domain_with_dns_server(domain_name=%r, dns_server_name=%r)', domain_name, dns_server_name)
+        if debug:
+            logging.exception('soa_for_domain_with_dns_server(domain_name=%r, dns_server_name=%r)', domain_name, dns_server_name)
         return ''
 
 
@@ -118,8 +126,8 @@ def check_soas_equal_for_domain(domain_name, warning_minimum_nameservers=2, crit
         are_all_soas_equal = all(
             map(lambda each: each == soa_records[0], soa_records))
     except Exception as error:
-        # TODO if --verbose
-        # logging.exception('check_soas_equal_for_domain(domain_name=%r, warning_minimum_nameservers=%r, critical_minimum_nameservers=%r, hidden_primaries=%r)', domain_name, warning_minimum_nameservers, critical_minimum_nameservers, hidden_primaries)
+        if debug:
+            logging.exception('check_soas_equal_for_domain(domain_name=%r, warning_minimum_nameservers=%r, critical_minimum_nameservers=%r, hidden_primaries=%r)', domain_name, warning_minimum_nameservers, critical_minimum_nameservers, hidden_primaries)
         return (NAGIOS.WARNING, "%r" % error)
 
     if not are_all_soas_equal:
