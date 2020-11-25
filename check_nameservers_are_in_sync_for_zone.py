@@ -21,6 +21,8 @@ Option:
     --selftest              Execute the unittests for this module
     --debug                 Help debugging
 
+"""
+"""
 Copyright: Martin Häcker <spamfenger (at) gmx.de>
 License AGPL: https://www.gnu.org/licenses/agpl-3.0.html
 
